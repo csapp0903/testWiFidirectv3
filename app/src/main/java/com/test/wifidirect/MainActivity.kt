@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity(), WiFiDirectManager.Callback {
 
         btnAutoConnect.setOnClickListener {
             if (checkPermissions()) {
-                wifiDirectManager.autoDiscoverAndConnect()
+                wifiDirectManager.autoDiscoverAndConnect("DESKTOP-IFID41F")
             }
         }
 

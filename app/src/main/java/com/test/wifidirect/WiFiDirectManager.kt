@@ -23,6 +23,8 @@ class WiFiDirectManager(private val context: Context) {
         private const val TAG = "WiFiDirectManager"
     }
 
+    // 用于存储想要自动连接的目标设备名称
+    private var targetDeviceName: String? = null
     private var manager: WifiP2pManager? = null
     private var channel: WifiP2pManager.Channel? = null
     private var receiver: BroadcastReceiver? = null
@@ -140,8 +142,12 @@ class WiFiDirectManager(private val context: Context) {
      * 一键自动连接 —— 发现后自动连接第一个找到的设备
      */
     @SuppressLint("MissingPermission")
-    fun autoDiscoverAndConnect() {
-        callback?.onStatusChanged("一键连接：正在搜索设备...")
+    fun autoDiscoverAndConnect(targetName: String? = null) {
+        this.targetDeviceName = targetName // 保存目标名字
+        val statusMsg = if (targetName.isNullOrEmpty()) "正在搜索设备..." else "正在搜索特定设备: $targetName..."
+
+        callback?.onStatusChanged("一键连接：$statusMsg")
+
         manager?.discoverPeers(channel, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 callback?.onStatusChanged("一键连接：搜索中，发现设备后将自动连接...")
@@ -206,12 +212,34 @@ class WiFiDirectManager(private val context: Context) {
                             callback?.onStatusChanged("发现 ${peers.size} 个设备")
                         }
 
-                        // 自动连接逻辑：发现设备后自动连接第一个
+//                        // 自动连接逻辑：发现设备后自动连接第一个
+//                        if (autoConnectPending && peers.isNotEmpty()) {
+//                            autoConnectPending = false
+//                            val target = peers[0]
+//                            callback?.onStatusChanged("一键连接：自动连接 ${target.deviceName}...")
+//                            connectToDevice(target)
+//                        }
+                        // 核心自动连接逻辑
                         if (autoConnectPending && peers.isNotEmpty()) {
-                            autoConnectPending = false
-                            val target = peers[0]
-                            callback?.onStatusChanged("一键连接：自动连接 ${target.deviceName}...")
-                            connectToDevice(target)
+
+                            // 查找逻辑：如果有目标名，就找名字匹配的；否则还是取第一个
+                            val target = if (!targetDeviceName.isNullOrEmpty()) {
+                                // 这里使用 contains 来模糊匹配，防止设备名后面有空格或乱码
+                                // 也可以改回 `==` 进行精确匹配
+                                peers.find { it.deviceName != null && it.deviceName.contains(targetDeviceName!!, ignoreCase = true) }
+                            } else {
+                                peers[0] // 旧逻辑：没有指定名字，连接第一个
+                            }
+
+                            if (target != null) {
+                                // 找到了目标！
+                                autoConnectPending = false // 停止等待
+                                callback?.onStatusChanged("一键连接：发现目标 ${target.deviceName}，开始连接...")
+                                connectToDevice(target)
+                            } else {
+                                // 虽然发现了设备，但都不是我们想要的那个
+                                callback?.onStatusChanged("已发现 ${peers.size} 个设备，但未找到目标: $targetDeviceName，继续搜索...")
+                            }
                         }
                     }
                 }
